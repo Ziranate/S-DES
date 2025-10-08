@@ -20,8 +20,8 @@
 
 ```
 S-DES/
+├── screenshot/
 ├── src/
-│   ├──screenshot/
 │   ├── sdes/
 │   │   ├── core/
 │   │   │   └── SdesAlgorithm.java     # S-DES核心算法实现（加密、解密、密钥生成、破解）
@@ -67,7 +67,7 @@ S-DES/
     *   **开始破解**：点击后，程序会自动为明文生成密文（使用主密钥），然后开始破解。
     *   **破解结果**：显示破解是否成功、找到的所有密钥以及总耗时。
 
-![img.png](src/screenshot/img.png)
+![img.png](screenshot/img.png)
 
 ## 4. 测试与结果展示
 
@@ -93,10 +93,10 @@ S-DES/
 
 **截图**：
  * 加密
-![img_1.png](src/screenshot/img_1.png)
+![img_1.png](screenshot/img_1.png)
 
 * 解密
-![img_2.png](src/screenshot/img_2.png)
+![img_2.png](screenshot/img_2.png)
 
 ### 第2关：交叉测试
 
@@ -129,10 +129,10 @@ S-DES/
 
 **截图**：
 * 加密
-![img_3.png](src/screenshot/img_3.png)
+![img_3.png](screenshot/img_3.png)
 
 * 解密
-![img_4.png](src/screenshot/img_4.png)
+![img_4.png](screenshot/img_4.png)
 
 **结论**：ASCII模式功能正常。它展示了分组密码的ECB工作模式，即将长数据分割成块，逐块独立加密，证明了算法从处理二进制到处理实用文本的能力。
 
@@ -150,7 +150,7 @@ S-DES/
 程序成功找到了密钥，并显示了破解耗时。
 
 **截图**：
-![img_5.png](src/screenshot/img_5.png)
+![img_5.png](screenshot/img_5.png)
 
 **结论**：暴力破解功能实现了预期目标，多线程的应用显著提高了破解效率，在短时间内遍历了1024个密钥空间。
 
@@ -170,7 +170,7 @@ S-DES/
 程序不仅找到了原始密钥 `0000000000`，还找到了另外3个也能将 `00000001` 加密成 `11101010` 的密钥。
 
 **截图**：
-![img_6.png](src/screenshot/img_6.png)
+![img_6.png](screenshot/img_6.png)
 
 **结论**：
 测试结果明确表明，**对于S-DES算法，一个给定的明密文对可能对应多个密钥**。这是由其小密钥空间（1024）和明文空间（256）不匹配导致的（鸽巢原理）。平均而言，每个密文会对应 `1024 / 256 = 4` 个密钥。
