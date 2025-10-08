@@ -5,6 +5,7 @@ import sdes.utils.BitUtils;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.StringSelection;
 import java.util.List;
 import javax.swing.SwingWorker;
 
@@ -16,6 +17,10 @@ public class MainFrame extends JFrame {
     private final JComboBox<String> modeComboBox = new JComboBox<>(new String[]{"二进制模式", "ASCII模式"});
     private final JButton encryptButton = new JButton("加密");
     private final JButton decryptButton = new JButton("解密");
+
+    // --- 新增组件和状态变量 ---
+    private final JButton copyCiphertextButton = new JButton("复制二进制密文");
+    private String lastGeneratedBinaryCiphertext = ""; // 用于存储上一次加密生成的二进制密文
 
     // 扩展功能：暴力破解
     private final JTextField plainTextFieldBrute = new JTextField("01110010", 15);
@@ -29,17 +34,17 @@ public class MainFrame extends JFrame {
         layoutComponents();
         addListeners();
 
-        setSize(550, 500);
+        setSize(550, 550); // 稍微增高以容纳新按钮
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLocationRelativeTo(null); // 居中显示
+        setLocationRelativeTo(null);
     }
 
     private void initComponents() {
         outputArea.setEditable(false);
         outputArea.setLineWrap(true);
         inputArea.setLineWrap(true);
+        copyCiphertextButton.setEnabled(false); // 初始时不可用
     }
-
 
     private void layoutComponents() {
         JPanel mainPanel = new JPanel();
@@ -51,21 +56,28 @@ public class MainFrame extends JFrame {
         centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
 
         centerPanel.add(new JLabel("模式:"));
-        modeComboBox.setAlignmentX(Component.LEFT_ALIGNMENT); // 左对齐
+        modeComboBox.setAlignmentX(Component.LEFT_ALIGNMENT);
         centerPanel.add(modeComboBox);
         centerPanel.add(Box.createRigidArea(new Dimension(0, 10)));
         centerPanel.add(new JLabel("密钥 (10-bit):"));
-        keyField.setAlignmentX(Component.LEFT_ALIGNMENT); // 左对齐
+        keyField.setAlignmentX(Component.LEFT_ALIGNMENT);
         centerPanel.add(keyField);
         centerPanel.add(Box.createRigidArea(new Dimension(0, 10)));
         centerPanel.add(new JLabel("输入 (明文/密文):"));
         JScrollPane inputScrollPane = new JScrollPane(inputArea);
-        inputScrollPane.setAlignmentX(Component.LEFT_ALIGNMENT); // 左对齐
+        inputScrollPane.setAlignmentX(Component.LEFT_ALIGNMENT);
         centerPanel.add(inputScrollPane);
         centerPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        centerPanel.add(new JLabel("输出:"));
+
+        // --- 输出区域的布局修改 ---
+        JPanel outputHeaderPanel = new JPanel(new BorderLayout());
+        outputHeaderPanel.add(new JLabel("输出:"), BorderLayout.CENTER);
+        outputHeaderPanel.add(copyCiphertextButton, BorderLayout.EAST); // 将复制按钮放在右侧
+        outputHeaderPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        centerPanel.add(outputHeaderPanel);
+
         JScrollPane outputScrollPane = new JScrollPane(outputArea);
-        outputScrollPane.setAlignmentX(Component.LEFT_ALIGNMENT); // 左对齐
+        outputScrollPane.setAlignmentX(Component.LEFT_ALIGNMENT);
         centerPanel.add(outputScrollPane);
 
         // 底部面板：操作按钮
@@ -76,7 +88,7 @@ public class MainFrame extends JFrame {
         // 暴力破解面板
         JPanel bruteForcePanel = new JPanel();
         bruteForcePanel.setLayout(new BoxLayout(bruteForcePanel, BoxLayout.Y_AXIS));
-        bruteForcePanel.setBorder(BorderFactory.createTitledBorder("第4关：暴力破解"));
+        bruteForcePanel.setBorder(BorderFactory.createTitledBorder("第4/5关：暴力破解与密钥碰撞"));
 
         JPanel bruteForceTopRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
         bruteForceTopRow.add(new JLabel("明文(8-bit):"));
@@ -94,11 +106,10 @@ public class MainFrame extends JFrame {
         mainPanel.add(centerPanel, BorderLayout.CENTER);
         mainPanel.add(bottomPanel, BorderLayout.SOUTH);
 
-        // 整体布局
         Container contentPane = getContentPane();
         contentPane.setLayout(new BorderLayout());
         contentPane.add(mainPanel, BorderLayout.CENTER);
-        contentPane.add(bruteForcePanel, BorderLayout.SOUTH); // 将修改后的破解面板放在底部
+        contentPane.add(bruteForcePanel, BorderLayout.SOUTH);
     }
 
 
@@ -106,11 +117,21 @@ public class MainFrame extends JFrame {
         encryptButton.addActionListener(e -> process(true));
         decryptButton.addActionListener(e -> process(false));
         bruteForceButton.addActionListener(e -> runBruteForce());
+
+        // --- 为新按钮添加监听器 ---
+        copyCiphertextButton.addActionListener(e -> {
+            if (!lastGeneratedBinaryCiphertext.isEmpty()) {
+                // 将存储的二进制密文复制到系统剪贴板
+                StringSelection stringSelection = new StringSelection(lastGeneratedBinaryCiphertext);
+                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(stringSelection, null);
+                JOptionPane.showMessageDialog(this, "二进制密文已复制到剪贴板！", "提示", JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
     }
 
     private void process(boolean isEncrypt) {
-        String keyText = keyField.getText();
-        String inputText = inputArea.getText();
+        String keyText = keyField.getText().trim();
+        String inputText = inputArea.getText().trim();
         String selectedMode = (String) modeComboBox.getSelectedItem();
 
         if (keyText.length() != 10 || !keyText.matches("[01]+")) {
@@ -121,30 +142,68 @@ public class MainFrame extends JFrame {
         try {
             boolean[] keyBits = BitUtils.fromBinaryString(keyText);
             SdesAlgorithm sdes = new SdesAlgorithm(keyBits);
+            StringBuilder outputBinary = new StringBuilder();
 
-            String binaryInput;
-            if ("ASCII模式".equals(selectedMode)) {
-                binaryInput = BitUtils.asciiToBinary(inputText);
-            } else { // 二进制模式
-                if (!inputText.matches("[01]+") || inputText.length() % 8 != 0) {
-                    JOptionPane.showMessageDialog(this, "二进制模式下，输入必须是8的倍数长度的二进制数!", "错误", JOptionPane.ERROR_MESSAGE);
+            if (isEncrypt) {
+                // --- 加密逻辑 ---
+                lastGeneratedBinaryCiphertext = ""; // 重置状态
+                copyCiphertextButton.setEnabled(false); // 先禁用复制按钮
+
+                if ("ASCII模式".equals(selectedMode)) {
+                    for (char ch : inputText.toCharArray()) {
+                        String block = String.format("%8s", Integer.toBinaryString(ch & 0xFF)).replace(' ', '0');
+                        boolean[] resultBits = sdes.encrypt(BitUtils.fromBinaryString(block));
+                        outputBinary.append(BitUtils.toBinaryString(resultBits));
+                    }
+                } else { // 二进制模式
+                    if (!inputText.matches("[01]+") || inputText.length() % 8 != 0) {
+                        JOptionPane.showMessageDialog(this, "二进制模式下，输入必须是8的倍数长度的二进制数!", "错误", JOptionPane.ERROR_MESSAGE);
+                        return;
+                    }
+                    for (int i = 0; i < inputText.length(); i += 8) {
+                        String block = inputText.substring(i, i + 8);
+                        boolean[] resultBits = sdes.encrypt(BitUtils.fromBinaryString(block));
+                        outputBinary.append(BitUtils.toBinaryString(resultBits));
+                    }
+                }
+
+                // 加密完成，更新状态和UI
+                lastGeneratedBinaryCiphertext = outputBinary.toString();
+                String asciiGarble = BitUtils.binaryToAscii(lastGeneratedBinaryCiphertext);
+                outputArea.setText("密文二进制 (可用于解密):\n" + lastGeneratedBinaryCiphertext + "\n\n字符展示 (乱码):\n" + asciiGarble);
+                copyCiphertextButton.setEnabled(true);
+
+            } else {
+                // --- 解密逻辑 (更智能) ---
+                String binaryToDecrypt;
+                // 智能判断：如果输入区为空，且我们刚生成了密文，就自动使用它
+                if (inputText.isEmpty() && !lastGeneratedBinaryCiphertext.isEmpty()) {
+                    binaryToDecrypt = lastGeneratedBinaryCiphertext;
+                    inputArea.setText(binaryToDecrypt); // 帮用户填入输入框，更直观
+                } else {
+                    binaryToDecrypt = inputText;
+                }
+
+                if (!binaryToDecrypt.matches("[01]+") || binaryToDecrypt.length() % 8 != 0) {
+                    JOptionPane.showMessageDialog(this,
+                            "解密输入必须是8的倍数长度的二进制串！\n（加密后可直接点击解密，或手动粘贴二进制密文）",
+                            "错误", JOptionPane.ERROR_MESSAGE);
                     return;
                 }
-                binaryInput = inputText;
-            }
 
-            StringBuilder binaryOutput = new StringBuilder();
-            for (int i = 0; i < binaryInput.length(); i += 8) {
-                String block = binaryInput.substring(i, i + 8);
-                boolean[] blockBits = BitUtils.fromBinaryString(block);
-                boolean[] resultBits = isEncrypt ? sdes.encrypt(blockBits) : sdes.decrypt(blockBits);
-                binaryOutput.append(BitUtils.toBinaryString(resultBits));
-            }
+                for (int i = 0; i < binaryToDecrypt.length(); i += 8) {
+                    String block = binaryToDecrypt.substring(i, i + 8);
+                    boolean[] resultBits = sdes.decrypt(BitUtils.fromBinaryString(block));
+                    outputBinary.append(BitUtils.toBinaryString(resultBits));
+                }
 
-            if ("ASCII模式".equals(selectedMode)) {
-                outputArea.setText(BitUtils.binaryToAscii(binaryOutput.toString()));
-            } else { // 二进制模式
-                outputArea.setText(binaryOutput.toString());
+                if ("ASCII模式".equals(selectedMode)) {
+                    outputArea.setText(BitUtils.binaryToAscii(outputBinary.toString()));
+                } else {
+                    outputArea.setText(outputBinary.toString());
+                }
+                lastGeneratedBinaryCiphertext = ""; // 解密后清空状态
+                copyCiphertextButton.setEnabled(false);
             }
 
         } catch (Exception ex) {
@@ -152,6 +211,8 @@ public class MainFrame extends JFrame {
         }
     }
 
+    // runBruteForce 方法保持不变，这里省略以减少篇幅。
+    // 请确保你使用的是之前包含耗时统计和查找所有密钥的版本。
     private void runBruteForce() {
         String plainTextManualInput = plainTextFieldBrute.getText();
         String keyText = keyField.getText();
@@ -224,7 +285,7 @@ public class MainFrame extends JFrame {
                                 resultText.append("&nbsp;&nbsp;");
                             }
                         }
-                        resultText.append("<br>耗时: ").append(duration).append(" ms</font>");
+                        resultText.append("<br><font color='blue'>耗时: ").append(duration).append(" ms</font>");
                         resultText.append("</html>");
                         bruteForceResultLabel.setText(resultText.toString());
                     } else {
@@ -237,5 +298,4 @@ public class MainFrame extends JFrame {
             }
         }.execute();
     }
-
 }
